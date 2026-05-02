@@ -1,0 +1,5 @@
+rank,property_id,address,city,state,zip,list_price,sqft,beds,baths,property_condition,days_on_market,n_comps,comp_psf,arv,rehab_cost,total_costs,max_bid,offer_price,expected_profit,expected_roi,capital_required,list_to_arv_discount,binding_constraint,feasible,deal_score,selected,portfolio_rank
+1,P0061,5664 Oak St,Phoenix,AZ,85005,476755,2324,4,3.5,fair,332,7,214.00493612307824,497347.0,69720.0,121120.0,180280.0,180280.0,195947.0,0.7838,250000.0,0.0414,budget,True,0.8198,True,1
+3,P0011,6309 Elm St,Phoenix,AZ,85008,514478,2370,4,3.5,fair,43,6,208.140243902439,493292.0,71100.0,122089.0,178900.0,178900.0,192303.0,0.7692,250000.0,-0.0429,budget,True,0.6976,True,2
+5,P0031,8011 Cedar St,Phoenix,AZ,85024,497728,2377,3,2.5,good,88,7,202.4961247866965,481333.0,35655.0,89068.0,214345.0,214345.0,177920.0,0.7117,250000.0,-0.0341,budget,True,0.6516,True,3
+4,P0034,219 Maple St,Tampa,FL,33622,428236,2371,4,3.5,fair,126,5,198.8746974882575,471532.0,71130.0,120593.0,178870.0,178870.0,172069.0,0.6883,250000.0,0.0918,budget,True,0.6827,True,4

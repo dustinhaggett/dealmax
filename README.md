@@ -20,6 +20,10 @@ pip install -r requirements.txt
 
 # Will auto-generate 100 synthetic listings if the CSV doesn't exist.
 python main.py --input data/listings.csv --budget 250000 --target-roi 0.18
+
+# With portfolio selection across a $1 M bankroll:
+python main.py --input data/listings.csv --budget 250000 --target-roi 0.18 \
+               --total-bankroll 1000000
 ```
 
 Outputs:
@@ -39,6 +43,7 @@ CLI flags:
 | `--target-roi` | `0.18` | minimum acceptable ROI |
 | `--min-profit` | `25000` | minimum acceptable expected profit ($) |
 | `--holding-months` | `6` | months of carry to underwrite |
+| `--total-bankroll` | *(skip)* | total capital across all deals; enables portfolio MILP optimizer |
 
 ---
 
@@ -69,6 +74,40 @@ binding constraint is recorded for every deal so the investor can see
 *why* a bid is capped (priced for ROI, priced for profit, or priced
 out by budget). The math is implemented in `src/optimizer.py`; see the
 docstring for the full derivation.
+
+## Portfolio selection
+
+When `--total-bankroll` is provided, DealMax runs a second optimisation pass
+across all feasible deals to select the portfolio that **maximises total
+expected profit** without exceeding the bankroll.
+
+### MILP formulation
+
+Let *n* be the number of feasible deals, *p_i* the expected profit and *c_i*
+the capital required for deal *i*, and *B* the total bankroll:
+
+```
+maximise   Σ  p_i · x_i
+subject to Σ  c_i · x_i  ≤  B
+           x_i ∈ {0, 1}   ∀ i
+```
+
+This is the **0/1 knapsack** problem.  It is **NP-hard** because the feasible
+set `{x ∈ {0,1}^n}` is discrete — you cannot form a continuous convex
+combination of two integer-feasible points and stay feasible, so the problem is
+non-convex and gradient methods cannot guarantee a global optimum.
+
+The **LP relaxation** (replace `x_i ∈ {0,1}` with `0 ≤ x_i ≤ 1`) *is*
+convex: the feasible region becomes a convex polytope and the objective is
+linear.  The LP optimal value is an upper bound on the MILP and is used
+internally by the branch-and-bound solver (PuLP / CBC).
+
+Outputs:
+- `outputs/portfolio.csv` — selected deals with `portfolio_rank` column
+- Console summary: capital deployed, total expected profit, # deals, avg ROI.
+
+A greedy ROI-sorted heuristic (`select_portfolio_greedy`) is included as a
+baseline.  The MILP is always at least as good as the greedy solution.
 
 ## ARV estimation
 
@@ -150,12 +189,15 @@ clustering to work with.
 ├── main.py                    # CLI entry point
 ├── requirements.txt
 ├── data/                      # input CSVs
-├── outputs/                   # ranked CSV + charts
+├── outputs/                   # ranked CSV + charts + portfolio.csv
+├── tests/
+│   └── test_portfolio.py      # pytest suite for the portfolio optimizer
 └── src/
     ├── data_loader.py         # CSV load + synthetic generator
     ├── comps.py               # ARV from comparable sales
     ├── costs.py               # rehab + transaction cost model
-    ├── optimizer.py           # closed-form max-bid solver
+    ├── optimizer.py           # closed-form max-bid solver (per deal)
     ├── scoring.py             # weighted multi-signal ranking
+    ├── portfolio.py           # 0/1 knapsack MILP + greedy baseline
     └── visualize.py           # the 3 required charts
 ```

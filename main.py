@@ -31,6 +31,7 @@ from src.costs import attach_rehab, HOLDING_MONTHS_DEFAULT
 from src.optimizer import optimize
 from src.scoring import score_deals
 from src.visualize import plot_all
+from src.portfolio import select_portfolio
 
 
 OUTPUT_COLUMNS = [
@@ -61,6 +62,10 @@ def parse_args() -> argparse.Namespace:
                    help="Minimum acceptable expected profit in dollars.")
     p.add_argument("--holding-months", type=int, default=HOLDING_MONTHS_DEFAULT,
                    help="Months of holding cost to underwrite.")
+    p.add_argument("--total-bankroll", type=float, default=None,
+                   help="Total capital available across ALL deals. When set, "
+                        "runs the portfolio MILP optimizer and writes "
+                        "outputs/portfolio.csv.")
     return p.parse_args()
 
 
@@ -115,6 +120,34 @@ def main() -> None:
         print(f"  list / max_bid / ARV:     ${top['list_price']:,.0f} / ${top['max_bid']:,.0f} / ${top['arv']:,.0f}")
         print(f"  expected ROI / profit:    {top['expected_roi']:.1%} / ${top['expected_profit']:,.0f}")
     print("=" * 60)
+
+    if args.total_bankroll is not None:
+        print()
+        print(f"[main] Running portfolio MILP optimizer (bankroll=${args.total_bankroll:,.0f}) ...")
+        df = select_portfolio(df, args.total_bankroll)
+
+        portfolio_path = Path(args.charts_dir) / "portfolio.csv"
+        portfolio_cols = [c for c in OUTPUT_COLUMNS + ["selected", "portfolio_rank"]
+                          if c in df.columns]
+        portfolio_df = df[df["selected"]].sort_values("portfolio_rank")
+        portfolio_df[portfolio_cols].to_csv(portfolio_path, index=False)
+        print(f"[main] Wrote portfolio -> {portfolio_path}")
+
+        selected = df[df["selected"]]
+        capital_deployed = selected["capital_required"].sum()
+        total_profit = selected["expected_profit"].sum()
+        n_deals = len(selected)
+        avg_roi = selected["expected_roi"].mean() if n_deals > 0 else 0.0
+
+        print()
+        print("=" * 60)
+        print("Portfolio summary")
+        print(f"  Deals selected:           {n_deals}")
+        print(f"  Capital deployed:         ${capital_deployed:,.0f}  "
+              f"({capital_deployed / args.total_bankroll:.1%} of bankroll)")
+        print(f"  Total expected profit:    ${total_profit:,.0f}")
+        print(f"  Average ROI (selected):   {avg_roi:.1%}")
+        print("=" * 60)
 
 
 if __name__ == "__main__":
