@@ -29,8 +29,9 @@ from src.data_loader import load_listings
 from src.comps import estimate_arv
 from src.costs import attach_rehab, HOLDING_MONTHS_DEFAULT
 from src.optimizer import optimize
+from src.risk import risk_adjusted_score, simulate_all
 from src.scoring import score_deals
-from src.visualize import plot_all
+from src.visualize import plot_all, plot_risk_fan
 from src.portfolio import select_portfolio
 
 
@@ -39,8 +40,9 @@ OUTPUT_COLUMNS = [
     "list_price", "sqft", "beds", "baths", "property_condition",
     "days_on_market", "n_comps", "comp_psf", "arv",
     "rehab_cost", "total_costs", "max_bid", "offer_price",
-    "expected_profit", "expected_roi", "capital_required",
-    "list_to_arv_discount", "binding_constraint",
+    "expected_profit", "expected_roi", "capital_required",    "p_feasible", "profit_p5", "profit_p50", "profit_p95",
+    "roi_p5", "roi_p50", "roi_p95",
+    "mean_profit", "mean_roi", "risk_adjusted_score",    "list_to_arv_discount", "binding_constraint",
     "feasible", "deal_score",
 ]
 
@@ -66,6 +68,10 @@ def parse_args() -> argparse.Namespace:
                    help="Total capital available across ALL deals. When set, "
                         "runs the portfolio MILP optimizer and writes "
                         "outputs/portfolio.csv.")
+    p.add_argument("--simulate", action="store_true",
+                   help="Run Monte Carlo risk simulation and add uncertainty metrics to the output.")
+    p.add_argument("--n-sims", type=int, default=1000,
+                   help="Number of Monte Carlo draws per deal when --simulate is enabled.")
     return p.parse_args()
 
 
@@ -93,6 +99,19 @@ def main() -> None:
         holding_months=args.holding_months,
     )
 
+    if args.simulate:
+        print(f"[main] Running Monte Carlo risk simulation ({args.n_sims} draws per deal) ...")
+        df = simulate_all(
+            df,
+            target_roi=args.target_roi,
+            min_profit=args.min_profit,
+            holding_months=args.holding_months,
+            budget=args.budget,
+            n_sims=args.n_sims,
+            seed=42,
+        )
+        df["risk_adjusted_score"] = risk_adjusted_score(df)
+
     print("[main] Scoring & ranking ...")
     df = score_deals(df)
 
@@ -106,6 +125,11 @@ def main() -> None:
     chart_paths = plot_all(df, args.charts_dir)
     for p in chart_paths:
         print(f"[main]   chart -> {p}")
+
+    if args.simulate:
+        risk_fan_path = plot_risk_fan(df, top_n=10, out_dir=args.charts_dir)
+        chart_paths.append(risk_fan_path)
+        print(f"[main]   chart -> {risk_fan_path}")
 
     feasible = df[df["feasible"]]
     print()
