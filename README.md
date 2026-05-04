@@ -44,6 +44,8 @@ CLI flags:
 | `--min-profit` | `25000` | minimum acceptable expected profit ($) |
 | `--holding-months` | `6` | months of carry to underwrite |
 | `--total-bankroll` | *(skip)* | total capital across all deals; enables portfolio MILP optimizer |
+| `--simulate` | `false` | run Monte Carlo risk simulation and emit uncertainty metrics |
+| `--n-sims` | `1000` | number of Monte Carlo draws per deal when `--simulate` is enabled |
 
 ---
 
@@ -144,6 +146,28 @@ fix-and-flip rules of thumb. Each constant lives at the top of
 `src/costs.py` and can be swapped for a data-driven model
 (per-market commissions, lender-specific rates, line-item rehab
 scope) without touching the optimizer.
+
+## Monte Carlo risk simulation
+
+When `--simulate` is enabled, DealMax replaces point-estimate profit and
+ROI with probabilistic distributions by sampling:
+
+- ARV from `N(arv, 0.10 * arv)`
+- rehab cost from `N(rehab_cost, 0.30 * rehab_cost)`
+- holding months from `N(holding_months, 1.5)` clipped to `[1, 18]`
+
+The simulation evaluates every draw at the deal's deterministic
+`offer_price`, then reports:
+
+- `p_feasible` — probability the sampled deal still meets ROI, profit,
+  and budget criteria
+- `profit_p5`, `profit_p50`, `profit_p95` — profit percentiles
+- `roi_p5`, `roi_p50`, `roi_p95` — ROI percentiles
+- `mean_profit`, `mean_roi`
+- `risk_adjusted_score` = `expected_profit * p_feasible`
+
+A new chart is emitted as `outputs/risk_fan.png`, showing the profit
+uncertainty band for the top deals.
 
 ## Deal score
 

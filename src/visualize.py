@@ -6,6 +6,7 @@ Three charts are produced for every run:
     1. Top 20 deals by ROI (horizontal bar chart)
     2. Max bid vs list price (scatter with break-even diagonal)
     3. Expected profit distribution (histogram)
+    4. Risk fan chart (when Monte Carlo simulation is enabled)
 
 We use matplotlib only -- no seaborn -- to keep the dependency
 footprint minimal. The Agg backend is forced so the script runs in
@@ -20,6 +21,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 
@@ -91,6 +93,40 @@ def plot_profit_distribution(df: pd.DataFrame,
     ax.grid(axis="y", linestyle="--", alpha=0.4)
     fig.tight_layout()
     out_path = out_dir / "profit_distribution.png"
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    return out_path
+
+
+def plot_risk_fan(df: pd.DataFrame, top_n: int = 10,
+                  out_dir: str | os.PathLike = "outputs") -> Path:
+    out_dir = _ensure_dir(out_dir)
+    if "p_feasible" not in df.columns or "profit_p5" not in df.columns:
+        raise ValueError("Risk fan chart requires Monte Carlo simulation columns.")
+
+    if "risk_adjusted_score" in df.columns:
+        ranking_col = "risk_adjusted_score"
+    else:
+        ranking_col = "profit_p50"
+
+    candidate = df[df["feasible"]].copy()
+    top = candidate.nlargest(top_n, ranking_col)[::-1]
+
+    labels = top["property_id"] + " (" + top["city"] + ")"
+    y_positions = np.arange(len(top))
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.hlines(y=y_positions, xmin=top["profit_p5"], xmax=top["profit_p95"],
+              color="#6baed6", alpha=0.8, linewidth=6)
+    ax.scatter(top["profit_p50"], y_positions, color="#2171b5", s=80, zorder=3)
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(labels)
+
+    ax.set_xlabel("Profit ($)")
+    ax.set_title(f"Risk Fan Chart: Profit Distribution for Top {len(top)} Deals")
+    ax.grid(axis="x", linestyle="--", alpha=0.4)
+    fig.tight_layout()
+
+    out_path = out_dir / "risk_fan.png"
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
     return out_path
