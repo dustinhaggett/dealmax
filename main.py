@@ -26,6 +26,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.data_loader import load_listings
+from src.data_adapter import load_kaggle_realtor
 from src.comps import estimate_arv
 from src.costs import attach_rehab, HOLDING_MONTHS_DEFAULT
 from src.optimizer import optimize
@@ -52,6 +53,12 @@ def parse_args() -> argparse.Namespace:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--input", default="data/listings.csv",
                    help="Path to input listings CSV. If missing, synthetic data is generated.")
+    p.add_argument("--source", default="synthetic",
+                   choices=["synthetic", "kaggle-realtor"],
+                   help="Where the input CSV comes from. 'synthetic' (default) "
+                        "expects the project's native schema; 'kaggle-realtor' "
+                        "expects the Kaggle 'USA Real Estate Dataset' columns "
+                        "and routes through src.data_adapter.")
     p.add_argument("--output", default="outputs/ranked_deals.csv",
                    help="Where to write the ranked deals CSV.")
     p.add_argument("--charts-dir", default="outputs",
@@ -78,8 +85,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    print(f"[main] Loading listings from {args.input} ...")
-    df = load_listings(args.input)
+    print(f"[main] Loading listings from {args.input} (source={args.source}) ...")
+    if args.source == "kaggle-realtor":
+        df = load_kaggle_realtor(args.input)
+    else:
+        df = load_listings(args.input)
     print(f"[main]   {len(df)} listings loaded.")
 
     print("[main] Estimating ARV from comps ...")

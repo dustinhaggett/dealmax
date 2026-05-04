@@ -38,6 +38,7 @@ CLI flags:
 | flag | default | meaning |
 |---|---|---|
 | `--input` | `data/listings.csv` | input listings CSV |
+| `--source` | `synthetic` | `synthetic` (project schema) or `kaggle-realtor` (raw Kaggle USA Real Estate columns) |
 | `--output` | `outputs/ranked_deals.csv` | ranked output CSV |
 | `--budget` | `250000` | total capital per deal (purchase + rehab) |
 | `--target-roi` | `0.18` | minimum acceptable ROI |
@@ -206,22 +207,59 @@ clustering to work with.
 
 `property_condition` is one of `excellent | good | fair | poor | distressed`.
 
+### Real data (Kaggle adapter)
+
+To run DealMax against real US listings, use the
+[USA Real Estate Dataset](https://www.kaggle.com/datasets/ahmedshahriarsakib/usa-real-estate-dataset)
+on Kaggle (~2.2M rows). Download the CSV, then:
+
+```bash
+python main.py --input path/to/realtor-data.csv \
+               --source kaggle-realtor \
+               --budget 250000 --target-roi 0.18
+```
+
+`src/data_adapter.py` conforms the raw Kaggle schema to the project's
+required schema by:
+
+- keeping only `status == 'for_sale'` rows
+- dropping listings missing price / sqft / beds / location
+- geocoding `zip_code` → `latitude / longitude` via `pgeocode`
+- inferring `property_condition` from `$/sqft` deviation against the
+  city median (price-per-sqft is a strong proxy for condition when
+  controlling for location)
+- deriving `days_on_market` from `prev_sold_date` (or defaulting to 30)
+- estimating `estimated_monthly_rent` as `0.7%` of list price (a
+  national fix-and-flip rule of thumb that lines up well with median
+  US gross rent yields)
+- defaulting `year_built` to 1985 (the Kaggle dataset doesn't include
+  it; the condition inference still works because the price-deviation
+  channel dominates)
+
+A pre-cleaned 200-row sample lives at `data/listings_kaggle_sample.csv`
+for offline demos, with the matching raw input at
+`data/realtor_sample_raw.csv`.
+
 ## Project structure
 
 ```
 .
 ├── main.py                    # CLI entry point
 ├── requirements.txt
-├── data/                      # input CSVs
+├── data/                      # input CSVs (synthetic + Kaggle samples)
 ├── outputs/                   # ranked CSV + charts + portfolio.csv
 ├── tests/
-│   └── test_portfolio.py      # pytest suite for the portfolio optimizer
+│   ├── test_portfolio.py      # MILP + greedy portfolio tests
+│   ├── test_risk.py           # Monte Carlo simulation tests
+│   └── test_data_adapter.py   # Kaggle adapter schema/cleaning tests
 └── src/
     ├── data_loader.py         # CSV load + synthetic generator
+    ├── data_adapter.py        # Kaggle USA Real Estate -> project schema
     ├── comps.py               # ARV from comparable sales
     ├── costs.py               # rehab + transaction cost model
     ├── optimizer.py           # closed-form max-bid solver (per deal)
     ├── scoring.py             # weighted multi-signal ranking
     ├── portfolio.py           # 0/1 knapsack MILP + greedy baseline
-    └── visualize.py           # the 3 required charts
+    ├── risk.py                # Monte Carlo profit/ROI distributions
+    └── visualize.py           # all charts (top-ROI, bid-vs-list, profit, fan)
 ```
